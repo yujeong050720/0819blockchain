@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Relation Blockchain Messages</title>
+</head>
+<body>
+  <h1>Messages</h1>
+  <div id="messages"></div>
+
+  <h2>Send Message</h2>
+  <input type="text" id="from" placeholder="Your Address" />
+  <input type="text" id="content" placeholder="Message Content" />
+  <button id="sendBtn">Send</button>
+
+  <script>
+    async function fetchMessages() {
+      const res = await fetch('/api/messages');
+      const messages = await res.json();
+
+      const container = document.getElementById('messages');
+      container.innerHTML = '';
+
+      messages.forEach(msg => {
+        const btn = document.createElement('button');
+        btn.textContent = msg.content + " (from: " + msg.from + ")";
+        btn.disabled = msg.score < 0.5;
+        container.appendChild(btn);
+        container.appendChild(document.createElement('br'));
+      });
+    }
+
+    document.getElementById('sendBtn').onclick = async () => {
+      const from = document.getElementById('from').value.trim();
+      const content = document.getElementById('content').value.trim();
+
+      if (!from || !content) {
+        alert('주소와 내용을 입력해주세요.');
+        return;
+      }
+
+      const res = await fetch('/api/sendMessage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from, content })
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        alert('메시지가 블록에 추가되었습니다!');
+        fetchMessages();
+      } else {
+        alert('오류: ' + result.error);
+      }
+    };
+
+    fetchMessages();
+  </script>
+</body>
+</html>
