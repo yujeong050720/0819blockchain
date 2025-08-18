@@ -1,8 +1,7 @@
-// RelScore.js
 const XLSX = require('xlsx');
 const path = require('path');
 
-// 파일 경로 정의
+// 경로 정의
 const CLICK_DB_PATH = path.join(__dirname, 'db', 'clickDB.xlsx');
 const REL_SCORE_DB_PATH = path.join(__dirname, 'db', 'RelScoreDB.xlsx');
 
@@ -27,8 +26,8 @@ function getParticipants() {
 }
 
 /**
- * 각 참여자의 관계점수 계산 (모든 타인과, 0.0 포함)
- * @returns {Array} [id, 점수] 목록
+ * 각 참여자의 관계점수 계산 (모든 타인 대상, 0.0 포함)
+ * @ returns {Array} [id, 점수] 목록
  */
 function calcRelScores() {
     const wb = XLSX.readFile(CLICK_DB_PATH);
@@ -50,7 +49,7 @@ function calcRelScores() {
             } else if (meClickedOther || otherClickedMe) {
                 score += 0.5;
             } else {
-                score += 0.0; // 기록 없으면 0.0
+                score += 0.0; // 아무 기록 없으면 0.0 명시적으로 추가
             }
         });
         scores.push([me, score]);
@@ -60,7 +59,7 @@ function calcRelScores() {
 
 /**
  * RelScoreDB.xlsx에 결과 저장
- * @param {Array} scores - [id, 점수] 목록
+ * @ param {Array} scores - [id, 점수] 목록
  */
 function saveRelScores(scores) {
     const ws = XLSX.utils.aoa_to_sheet(scores);
@@ -69,24 +68,10 @@ function saveRelScores(scores) {
     XLSX.writeFile(wb, REL_SCORE_DB_PATH);
 }
 
-/**
- * 콘솔에 결과 출력
- * @param {Array} scores - [id, 점수] 목록
- */
-function printScores(scores) {
-    console.log('관계점수 계산 결과:');
-    scores.forEach(([id, score]) => {
-        console.log(`${id}: ${score}`);
-    });
-}
-
-// --------------- 직접 실행 명령어 ---------------
+// 실행
 if (require.main === module) {
     const scores = calcRelScores();
-    printScores(scores);
-    saveRelScores(scores);
-    console.log(`RelScoreDB.xlsx 파일로 저장 완료`);
+    saveRelScores
 }
 
-// 모듈로도 사용 가능하게 export
-module.exports = { calcRelScores, saveRelScores, printScores };
+module.exports = { calcRelScores, saveRelScores };
