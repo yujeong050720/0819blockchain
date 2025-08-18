@@ -16,7 +16,7 @@ function getParticipants() {
         const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
         const ids = new Set();
         data.forEach(row => {
-            if (row) ids.add(row);
+            if (row) ids.add(row[0]);
             if (row[1]) ids.add(row[1]);
         });
         return Array.from(ids);
@@ -27,12 +27,14 @@ function getParticipants() {
 
 /**
  * 각 참여자의 관계점수 계산 (모든 타인 대상, 0.0 포함)
- * @ returns {Array} [id, 점수] 목록
+ * @returns {Array} [id, 점수] 목록
  */
 function calcRelScores() {
     const wb = XLSX.readFile(CLICK_DB_PATH);
     const ws = wb.Sheets[wb.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+
 
     const participants = getParticipants();
     const scores = [];
@@ -59,7 +61,7 @@ function calcRelScores() {
 
 /**
  * RelScoreDB.xlsx에 결과 저장
- * @ param {Array} scores - [id, 점수] 목록
+ * @param {Array} scores - [id, 점수] 목록
  */
 function saveRelScores(scores) {
     const ws = XLSX.utils.aoa_to_sheet(scores);
@@ -71,7 +73,7 @@ function saveRelScores(scores) {
 // 실행
 if (require.main === module) {
     const scores = calcRelScores();
-    saveRelScores
+    saveRelScores(scores);
 }
 
 module.exports = { calcRelScores, saveRelScores };
