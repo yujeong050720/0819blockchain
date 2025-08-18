@@ -1,0 +1,28 @@
+const NAME_DB_PATH = path.join(__dirname, 'db', 'nameDB.xlsx');
+
+// 닉네임 + 지갑 주소 저장
+app.post('/saveUser', express.json(), (req, res) => {
+  const { nickname, walletAddress } = req.body;
+  if (!nickname || !walletAddress) return res.status(400).json({ error: '데이터 누락' });
+
+  let workbook, sheetName = 'Sheet1', data = [];
+
+  if (fs.existsSync(NAME_DB_PATH)) {
+    workbook = xlsx.readFile(NAME_DB_PATH);
+    sheetName = workbook.SheetNames[0];
+    data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+  } else {
+    workbook = xlsx.utils.book_new();
+  }
+
+  // 새로운 사용자 추가
+  data.push({ nickname, walletAddress });
+
+  const newSheet = xlsx.utils.json_to_sheet(data);
+  workbook.Sheets[sheetName] = newSheet;
+  if (!workbook.SheetNames.includes(sheetName)) workbook.SheetNames.push(sheetName);
+
+  xlsx.writeFile(workbook, NAME_DB_PATH);
+
+  res.json({ success: true });
+});
