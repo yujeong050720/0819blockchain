@@ -1,79 +1,72 @@
 const XLSX = require('xlsx');
 const path = require('path');
 
-// 경로 정의
 const CLICK_DB_PATH = path.join(__dirname, 'db', 'clickDB.xlsx');
 const REL_SCORE_DB_PATH = path.join(__dirname, 'db', 'RelScoreDB.xlsx');
 
 /**
- * 참여자 목록 추출 함수
- * @returns {string[]} 참여자명 리스트
+ * clickDB.xlsx를 기반으로 알파벳순 관계쌍 점수 목록 생성
+ * @returns {Array} [idA, idB, 점수] 목록 (idA < idB)
  */
-function getParticipants() {
-    try {
-        const wb = XLSX.readFile(CLICK_DB_PATH);
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
-        const ids = new Set();
-        data.forEach(row => {
-            if (row) ids.add(row[0]);
-            if (row[1]) ids.add(row[1]);
-        });
-        return Array.from(ids);
-    } catch {
-        return [];
-    }
-}
-
-/**
- * 각 참여자의 관계점수 계산 (모든 타인 대상, 0.0 포함)
- * @returns {Array} [id, 점수] 목록
- */
-function calcRelScores() {
+function calcRelPairsScores() {
+    // 1. 데이터 로드
     const wb = XLSX.readFile(CLICK_DB_PATH);
     const ws = wb.Sheets[wb.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
-
-
-    const participants = getParticipants();
-    const scores = [];
-
-    participants.forEach(me => {
-        let score = 0;
-        participants.forEach(other => {
-            if (me === other) return; // 자기 자신 제외
-            const meClickedOther = data.some(row => row[0] === me && row[1] === other);
-            const otherClickedMe = data.some(row => row === other && row[1] === me);
-
-            if (meClickedOther && otherClickedMe) {
-                score += 1.0;
-            } else if (meClickedOther || otherClickedMe) {
-                score += 0.5;
-            } else {
-                score += 0.0; // 아무 기록 없으면 0.0 명시적으로 추가
-            }
-        });
-        scores.push([me, score]);
+    // 2. 모든 참여자 추출 (A열/B열에서만)
+    const ids = new Set();
+    data.forEach(row => {
+        if (row[0] && row[0].toString().trim()) ids.add(row[0].toString().trim());
+        if (row[1] && row[1].toString().trim()) ids.add(row[1].toString().trim());
     });
-    return scores;
+    const participants = Array.from(ids).sort();
+
+    // 3. 관계쌍 점수 계산
+    const results = [];
+    for (let i = 0; i < participants.length - 1; i++) {
+        for (let j = i + 1; j < participants.length; j++) {
+            const idA = participants[i];
+            const idB = participants[j];
+
+            const aToB = data.some(row =>
+                row[0] && row[1] &&
+                row[0].toString().trim() === idA &&
+                row[1].toString().trim() === idB
+            );
+            const bToA = data.some(row =>
+                row[0] && row[1] &&
+                row[0].toString().trim() === idB &&
+                row[1].toString().trim() === idA
+            );
+
+            let score = 0.0;
+            if (aToB && bToA) score = 1.0;
+            else if (aToB || bToA) score = 0.5;
+            // 둘 다 없으면 0.0 유지
+
+            results.push([idA, idB, score]);
+            console.log(`쌍: ${idA}, ${idB} / 점수: ${score}`);
+        }
+    }
+    return results;
 }
 
 /**
- * RelScoreDB.xlsx에 결과 저장
- * @param {Array} scores - [id, 점수] 목록
+ * 결과를 RelScoreDB.xlsx에 저장 ([a, b, 점수] 목록)
+ * @param {Array} pairsScores
  */
-function saveRelScores(scores) {
-    const ws = XLSX.utils.aoa_to_sheet(scores);
+function savePairScores(pairsScores) {
+    const ws = XLSX.utils.aoa_to_sheet(pairsScores);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
     XLSX.writeFile(wb, REL_SCORE_DB_PATH);
 }
 
-// 실행
+// 실행부
 if (require.main === module) {
-    const scores = calcRelScores();
-    saveRelScores(scores);
+    const pairsScores = calcRelPairsScores();
+    savePairScores(pairsScores);
 }
 
-module.exports = { calcRelScores, saveRelScores };
+module.exports = { calcRelPairsScores, savePairScores };
