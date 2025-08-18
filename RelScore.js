@@ -1,47 +1,82 @@
-// RelScore.js
-// 관계점수 계산 모듈
-// 한 사용자가 다른 사용자의 링크를 클릭하면 관계점수를 갱신
+//0819-12:51
+// RelScoreServer.js
+const express = require("express");
+const XLSX = require("xlsx");
+const fs = require("fs");
+const path = require("path");
+const RelScore = require("./RelScore");
 
-class RelScore {
-  constructor(relations) {
-    // relations: { userA: { userB: score, ...}, ... }
-    this.relations = relations || {};
-  }
+const app = express();
+app.use(express.json());
 
-  // 링크 클릭 기록: fromUser가 toUser 링크 클릭
-  recordClick(fromUser, toUser) {
-    if (!this.relations[fromUser]) {
-      this.relations[fromUser] = {};
-    }
-    if (!this.relations[toUser]) {
-      this.relations[toUser] = {};
-    }
+const dbFilePath = path.join(__dirname, "RelScoreDB.xlsx");
 
-    // 단방향 클릭 점수 0.5 설정
-    this.relations[fromUser][toUser] = 0.5;
-
-    // 혹시 반대 방향 클릭이 있으면 쌍방향 1.0 으로 업그레이드
-    if (this.relations[toUser][fromUser] === 0.5) {
-      this.relations[fromUser][toUser] = 1.0;
-      this.relations[toUser][fromUser] = 1.0;
+// --- 엑셀 저장 함수 ---
+function saveRelationsToExcel(filePath, relations) {
+  const rows = [];
+  for (const from in relations) {
+    for (const to in relations[from]) {
+      rows.push({
+        from,
+        to,
+        score: relations[from][to],
+      });
     }
   }
 
-  // 두 사용자 사이 관계 점수 반환
-  getScore(userA, userB) {
-    if (
-      this.relations[userA] &&
-      typeof this.relations[userA][userB] === "number"
-    ) {
-      return this.relations[userA][userB];
-    }
-    return 0.0; // 관계 없음
-  }
-
-  // 전체 관계 데이터 반환
-  getRelations() {
-    return this.relations;
-  }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "RelScore");
+  XLSX.writeFile(wb, filePath);
 }
 
-module.exports = RelScore;
+// --- 엑셀 불러오기 ---
+function loadRelationsFromExcel(filePath) {
+  if (!fs.existsSync(filePath)) return {};
+  const wb = XLSX.readFile(filePath);
+  const ws = wb.Sheets["RelScore"];
+  const rows = XLSX.utils.sheet_to_json(ws);
+
+  const relations = {};
+  rows.forEach(({ from, to, score }) => {
+    if (!relations[from]) relations[from] = {};
+    relations[from][to] = score;
+  });
+
+  return relations;
+}
+
+// --- 초기화 ---
+let relScore = new RelScore(loadRelationsFromExcel(dbFilePath));
+
+// --- 관계 갱신 API ---
+app.post("/click", (req, res) => {
+  const { fromUser, toUser } = req.body;
+
+  if (!fromUser || !toUser) {
+    return res.status(400).json({ error: "fromUser, toUser 필요" });
+  }
+
+  // 1. 관계 반영
+  relScore.recordClick(fromUser, toUser);
+
+  // 2. DB에 저장
+  saveRelationsToExcel(dbFilePath, relScore.getRelations());
+
+  // 3. 갱신된 값 반환 (= 서버에 실시간 반영)
+  return res.json({
+    message: "관계점수 갱신 완료",
+    updatedRelations: relScore.getRelations(),
+  });
+});
+
+// --- 관계값 조회 API ---
+app.get("/relations", (req, res) => {
+  res.json(relScore.getRelations());
+});
+
+// 서버 실행
+const PORT = 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 RelScore 서버 실행 중: http://localhost:${PORT}`);
+});
