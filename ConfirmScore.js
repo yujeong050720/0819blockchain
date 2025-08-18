@@ -1,58 +1,148 @@
 // 0819-12:50
 // ConfirmScore.js
-const XLSX = require('xlsx');
-const fs = require('fs');
-const path = require('path');
-const ConfirmScore = require('./ConfirmScore');
+// 인증점수 관리 및 DB 저장/불러오기
+const XLSX = require("xlsx");
+const fs = require("fs");
+const path = require("path");
 
-// ✅ 인증 점수를 엑셀 파일로 저장
-function saveConfirmScoresToExcel(filePath, confirmScore) {
-  const scores = confirmScore.getAllScores(); // {user: score, ...}
-  const rows = Object.keys(scores).map(user => ({
-    user: user,
-    score: scores[user]
-  }));
+class ConfirmScore {
+  constructor(data) {
+    this.totalUsers = data?.totalUsers || 0;
+    this.clicks = {};   // { toUser: Set(fromUsers) }
+    this.scores = {};   // { user: score }
 
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'ConfirmScore');
-  XLSX.writeFile(wb, filePath);
-}
-
-// ✅ 엑셀에서 인증 점수 불러오기 → ConfirmScore 인스턴스 생성
-function loadConfirmScoresFromExcel(filePath) {
-  if (!fs.existsSync(filePath)) {
-    // 파일이 없으면 빈 ConfirmScore 반환
-    return new ConfirmScore({});
+    // 기존 데이터 복원
+    if (data?.clicks) {
+      for (const user in data.clicks) {
+        this.clicks[user] = new Set(data.clicks[user]);
+      }
+    }
+    if (data?.scores) {
+      this.scores = data.scores;
+    }
   }
 
-  const wb = XLSX.readFile(filePath);
-  const ws = wb.Sheets['ConfirmScore'];
-  const rows = XLSX.utils.sheet_to_json(ws);
+  // 신규 유저 입장
+  addNewUser(user) {
+    this.totalUsers += 1;
 
-  const scores = {};
-  rows.forEach(({ user, score }) => {
-    scores[user] = parseFloat(score);
-  });
+    if (!this.clicks[user]) {
+      this.clicks[user] = new Set();
+    }
 
-  return new ConfirmScore(scores);
+    this.recalculateScores();
+  }
+
+  // 링크 클릭 기록 (고유 클릭만 인정됨)
+  recordClick(fromUser, toUser) {
+    if (!this.clicks[toUser]) this.clicks[toUser] = new Set();
+    this.clicks[toUser].add(fromUser); // Set이라 중복 방지
+    this.recalculateScores();
+  }
+
+  // 점수 재계산: score = (고유 클릭 수) / (총 유저 수)
+  recalculateScores() {
+    for (const user in this.clicks) {
+      const receivedClicks = this.clicks[user].size;
+      this.scores[user] =
+        this.totalUsers > 0 ? receivedClicks / this.totalUsers : 0;
+    }
+  }
+
+  // 특정 유저 점수 반환
+  getScore(user) {
+    return this.scores[user] || 0;
+  }
+
+  // 전체 점수 반환
+  getAllScores() {
+    return this.scores;
+  }
+
+  // 내부 데이터 추출 (엑셀 저장용)
+  exportData() {
+    return {
+      totalUsers: this.totalUsers,
+      clicks: Object.fromEntries(
+        Object.entries(this.clicks).map(([u, set]) => [u, Array.from(set)])
+      ),
+      scores: this.scores,
+    };
+  }
 }
 
-// ✅ 사용 예시
-const filePath = path.join(__dirname, 'ConfirmScore.xlsx');
+// ===============================
+// 엑셀 저장/불러오기 기능
+// ===============================
+const confirmScorePath = path.join(__dirname, "ConfirmScore.xlsx");
 
-// 1. 기존 데이터 불러오기
-let confirmScore = loadConfirmScoresFromExcel(filePath);
+// 저장
+function saveConfirmScores(confirmScore) {
+  const data = confirmScore.exportData();
 
-// 2. 새로운 유저 초기 등록 (가입 투표 찬성률 반영)
-confirmScore.setInitialScore('Alice', 0.7);  // 70% 승인
-confirmScore.setInitialScore('Bob', 0.9);    // 90% 승인
+  // 시트1: 전체 점수
+  const scoreRows = Object.keys(data.scores).map((user) => ({
+    user,
+    score: data.scores[user],
+  }));
+  const wsScores = XLSX.utils.json_to_sheet(scoreRows);
 
-// 3. 이벤트 발생
-confirmScore.updateScore('Alice', 'Bob');     // Bob이 Alice 링크 클릭 → Alice 점수 +0.01
-confirmScore.onNewConnection('Alice');        // Alice 새 접속 → 점수 +0.005
+  // 시트2: 고유 클릭 기록
+  const clickRows = [];
+  for (const user in data.clicks) {
+    data.clicks[user].forEach((from) => {
+      clickRows.push({ toUser: user, fromUser: from });
+    });
+  }
+  const wsClicks = XLSX.utils.json_to_sheet(clickRows);
 
-// 4. 저장
-saveConfirmScoresToExcel(filePath, confirmScore);
+  // 시트3: 메타데이터 (totalUsers)
+  const wsMeta = XLSX.utils.json_to_sheet([{ totalUsers: data.totalUsers }]);
 
-console.log("Confirm Scores saved:", confirmScore.getAllScores());
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsScores, "Scores");
+  XLSX.utils.book_append_sheet(wb, wsClicks, "Clicks");
+  XLSX.utils.book_append_sheet(wb, wsMeta, "Meta");
+
+  XLSX.writeFile(wb, confirmScorePath);
+}
+
+// 불러오기
+function loadConfirmScores() {
+  if (!fs.existsSync(confirmScorePath)) return new ConfirmScore({});
+  const wb = XLSX.readFile(confirmScorePath);
+
+  // 점수 복원
+  const wsScores = wb.Sheets["Scores"];
+  const wsClicks = wb.Sheets["Clicks"];
+  const wsMeta = wb.Sheets["Meta"];
+
+  const scores = {};
+  if (wsScores) {
+    XLSX.utils.sheet_to_json(wsScores).forEach(({ user, score }) => {
+      scores[user] = parseFloat(score);
+    });
+  }
+
+  const clicks = {};
+  if (wsClicks) {
+    XLSX.utils.sheet_to_json(wsClicks).forEach(({ toUser, fromUser }) => {
+      if (!clicks[toUser]) clicks[toUser] = [];
+      clicks[toUser].push(fromUser);
+    });
+  }
+
+  let totalUsers = 0;
+  if (wsMeta) {
+    const meta = XLSX.utils.sheet_to_json(wsMeta);
+    totalUsers = meta[0]?.totalUsers || 0;
+  }
+
+  return new ConfirmScore({ totalUsers, clicks, scores });
+}
+
+module.exports = {
+  ConfirmScore,
+  saveConfirmScores,
+  loadConfirmScores,
+};
