@@ -1,0 +1,98 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login & Wallet Connect</title>
+  <style>
+    body { margin:0; font-family:sans-serif; background:#e5e5e5; display:flex; flex-direction:column; height:100vh; }
+    header { background:rgb(4,9,71); color:white; height:100px; display:flex; align-items:center; padding-left:50px; }
+    header h1 { margin:0; font-size:2rem; }
+    .container { flex:1; display:flex; align-items:center; justify-content:center; }
+    .card { background:#fff; padding:20px; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.1); width:90%; max-width:400px; }
+    .card label, .card input, .card button, #walletAddress { display:block; width:100%; box-sizing:border-box; }
+    .card input, #walletAddress, .card button { margin-bottom:16px; }
+    .card input { padding:10px; border:1px solid #ccc; border-radius:8px; }
+    #walletAddress { padding:10px; border:1px solid #ccc; border-radius:8px; background:#fff; min-height:40px; font-size:0.95rem; color:#333; word-break:break-all; }
+    .card button { padding:10px; border:none; border-radius:8px; background:#ffe066; cursor:pointer; font-size:1rem; }
+    .card button:disabled { opacity:0.5; cursor:not-allowed; }
+    .start { text-align:center; margin-bottom:16px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Welcome!</h1>
+  </header>
+  <div class="container">
+    <div class="card">
+      <h1 class="start">Wallet Login</h1>
+      <label for="nicknameInput">채팅방 닉네임</label>
+      <input id="nicknameInput" type="text" placeholder="닉네임을 입력하세요"/>
+      <button id="connectWalletBtn">지갑 연결</button>
+      <span id="walletAddress"></span>
+      <button id="proceedBtn" disabled>채팅방으로 이동</button>
+    </div>
+  </div>
+
+  <!-- socket.io 클라이언트 스크립트 -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <script type="module">
+    import { connectWallet } from './dapp.js';
+
+    const nicknameInput = document.getElementById('nicknameInput');
+    const connectBtn = document.getElementById('connectWalletBtn');
+    const walletAddrSpan = document.getElementById('walletAddress');
+    const proceedBtn = document.getElementById('proceedBtn');
+
+    let walletAddress = localStorage.getItem('walletAddress') || '';
+
+    if (walletAddress) {
+      walletAddrSpan.textContent = walletAddress;
+    }
+
+    function updateBtn() {
+      proceedBtn.disabled = !(nicknameInput.value.trim() && walletAddress);
+    }
+    nicknameInput.addEventListener('input', updateBtn);
+
+    connectBtn.addEventListener('click', async () => {
+      try {
+        walletAddress = await connectWallet();
+        localStorage.setItem('walletAddress', walletAddress);
+        walletAddrSpan.textContent = walletAddress;
+        updateBtn();
+      } catch (err) {
+        alert('지갑 연결 실패: ' + (err?.message || err));
+      }
+    });
+
+    const socket = io();
+
+    proceedBtn.addEventListener('click', () => {
+      const nick = nicknameInput.value.trim();
+      if (!nick) return alert('닉네임을 입력하세요');
+      if (!walletAddress) return alert('지갑을 연결하세요');
+
+      localStorage.setItem('userId', nick);
+
+      // 서버로 입장 검증 요청 전송
+      socket.emit('requestEntry', { wallet: walletAddress, nickname: nick });
+
+      // 서버에서 승인/거절 알림 수신
+      socket.on('verificationCompleted', (data) => {
+        if (data.candidate && data.candidate.toLowerCase() === walletAddress.toLowerCase()) {
+          if (data.approved) {
+            window.location.href = 'page2.html';
+          } else {
+            alert('승인되지 않았습니다.');
+          }
+        }
+      });
+    });
+
+    updateBtn(); // 초기 버튼 활성화 상태 검사
+  </script>
+</body>
+</html>
