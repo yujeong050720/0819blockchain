@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Login Page</title>
+</head>
+<body>
+  <h2>사용자 로그인</h2>
+  <form id="loginForm">
+    <label>닉네임: <input type="text" id="nickname" required></label><br><br>
+    <label>지갑 주소: <input type="text" id="wallet" required></label><br><br>
+    <label>링크 입력: <input type="text" id="userLink" placeholder="https://example.com"></label><br><br>
+    <button type="submit">Send</button>
+  </form>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const nickname = document.getElementById('nickname').value.trim();
+      const wallet = document.getElementById('wallet').value.trim();
+      const userLink = document.getElementById('userLink').value.trim();
+
+      // html2.html로 이동 + query string으로 전달
+      const query = `nickname=${encodeURIComponent(nickname)}&wallet=${encodeURIComponent(wallet)}&link=${encodeURIComponent(userLink)}`;
+      window.location.href = `page2.html?${query}`;
+    });
+  </script>
+</body>
+</html>
