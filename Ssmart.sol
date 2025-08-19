@@ -1,61 +1,53 @@
-// smart.js
-const { ethers } = require("ethers");
-const fs = require("fs");
-const path = require("path");
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
 
-// 1. RPC Provider (예: Hardhat, Ganache, Infura, Alchemy 등)
-const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545"); // 로컬 노드 RPC
+contract RelationMessage {
+    struct Message {
+        uint256 id;
+        address sender;
+        string content;
+    }
 
-// 2. 운영자 지갑 (private key 필요)
-const privateKey = "0xYOUR_PRIVATE_KEY"; // 실제 운영자 프라이빗 키
-const wallet = new ethers.Wallet(privateKey, provider);
+    // 사용자 개인관계점수를 저장
+    mapping(address => uint256) public relationScore;
 
-// 3. ABI & Contract Address
-const abiPath = path.join(__dirname, "RelationMessage.json"); // 컴파일된 ABI JSON
-const abi = JSON.parse(fs.readFileSync(abiPath, "utf8")).abi;
-const contractAddress = "0xYOUR_DEPLOYED_CONTRACT_ADDRESS";
+    // 메시지 저장
+    Message[] public messages;
 
-// 4. Contract 객체
-const contract = new ethers.Contract(contractAddress, abi, wallet);
+    // 메시지를 누른 기록
+    mapping(uint256 => address[]) public messageClicks;
 
-// ----------------------------- //
-// 서버에서 호출할 함수들
-// ----------------------------- //
+    // 개인관계점수 set 함수 (운영자만 실행 가능하도록 이 부분은 예시)
+    function setRelationScore(address user, uint256 score) public {
+        require(score <= 1e18, "점수는 0~1 사이로 설정하세요"); // 0~1 (18 decimals)
+        relationScore[user] = score;
+    }
 
-// 개인 점수 세팅
-async function setRelationScore(user, score) {
-  const tx = await contract.setRelationScore(user, score);
-  await tx.wait();
-  console.log(`✅ 점수 기록: ${user} = ${score}`);
+    // 메시지 보내기
+    function sendMessage(string memory content) public {
+        messages.push(Message({
+            id: messages.length,
+            sender: msg.sender,
+            content: content
+        }));
+    }
+
+    // 메시지를 클릭 (x 주소의 관계점수가 0.5 이상일 때만)
+    function clickMessage(uint256 messageId) public {
+        require(messageId < messages.length, "잘못된 메시지 ID");
+        address senderOfMessage = messages[messageId].sender;
+        require(relationScore[senderOfMessage] >= 5e17, "보낸 사람의 관계점수가 낮아 클릭 불가"); // 0.5 (18 decimals)
+        messageClicks[messageId].push(msg.sender);
+    }
+
+    // 메시지 클릭 가능 여부 check 함수
+    function canClickMessage(uint256 messageId) public view returns (bool) {
+        address senderOfMessage = messages[messageId].sender;
+        return (relationScore[senderOfMessage] >= 5e17);
+    }
+
+    // 메시지 리스트 리턴
+    function getMessages() public view returns (Message[] memory) {
+        return messages;
+    }
 }
-
-// 메시지 전송
-async function recordOnChainMessage(content) {
-  const tx = await contract.sendMessage(content);
-  await tx.wait();
-  console.log(`✅ 메시지 기록: ${content}`);
-}
-
-// 메시지 클릭
-async function recordOnChainClick(messageId, clicker) {
-  const tx = await contract.clickMessage(messageId);
-  await tx.wait();
-  console.log(`✅ 메시지 클릭 기록: messageId=${messageId}, clicker=${clicker}`);
-}
-
-// 메시지 조회
-async function fetchMessages() {
-  const msgs = await contract.getMessages();
-  return msgs.map(m => ({
-    id: m.id.toString(),
-    sender: m.sender,
-    content: m.content
-  }));
-}
-
-module.exports = {
-  setRelationScore,
-  recordOnChainMessage,
-  recordOnChainClick,
-  fetchMessages
-};
