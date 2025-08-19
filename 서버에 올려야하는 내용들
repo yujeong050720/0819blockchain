@@ -46,3 +46,5 @@ socket.on('vote', ({ candidate, verifier, approve }) => {
     pendingVotes.delete(candidate.toLowerCase());
   }
 });
+
+verifiers? 걔내를 불러와서 해야함
