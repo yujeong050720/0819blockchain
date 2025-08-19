@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>채팅 & 링크</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    #chatBox { border: 1px solid #ccc; padding: 10px; width: 100%; height: 300px; overflow-y: auto; margin-bottom: 10px; }
+    #messageInput { width: 80%; padding: 5px; }
+    #sendBtn { padding: 5px 10px; }
+    .message { margin-bottom: 5px; }
+    .from { font-weight: bold; margin-right: 5px; }
+  </style>
+</head>
+<body>
+  <h1>채팅 & 링크 페이지</h1>
+
+  <div>
+    <label>닉네임: <input type="text" id="nickname" placeholder="닉네임 입력"></label>
+  </div>
+
+  <h2>채팅</h2>
+  <div id="chatBox"></div>
+  <input type="text" id="messageInput" placeholder="메시지 입력">
+  <button id="sendBtn">Send</button>
+
+  <script>
+const socket = io();
+
+const chatBox = document.getElementById('chatBox');
+const messageInput = document.getElementById('messageInput');
+const sendBtn = document.getElementById('sendBtn');
+const nicknameInput = document.getElementById('nickname');
+
+// ====== index.html에서 전달된 nickname/wallet 처리 ======
+const params = new URLSearchParams(window.location.search);
+const nickname = params.get('nickname');
+const wallet = params.get('wallet');
+
+// 닉네임 input에 자동 채우기
+if (nickname) nicknameInput.value = nickname;
+
+// 서버에 사용자 등록
+if (nickname && wallet) {
+  socket.emit('registerUser', { walletAddr: wallet, nickname });
+}
+
+// 기존 채팅 로그 수신
+socket.on('chatLogs', (logs) => {
+  chatBox.innerHTML = ''; 
+  logs.forEach(log => addMessage(log.fromUser, log.message));
+  chatBox.scrollTop = chatBox.scrollHeight;
+});
+
+// 새 메시지 수신
+socket.on('receiveMessage', ({ fromUser, message }) => {
+  addMessage(fromUser, message);
+});
+
+function addMessage(fromUser, message) {
+  const div = document.createElement('div');
+  div.classList.add('message');
+  div.innerHTML = `<span class="from">${fromUser}:</span> ${message}`;
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// 메시지 전송
+sendBtn.addEventListener('click', () => {
+  const fromUser = nicknameInput.value.trim();
+  const message = messageInput.value.trim();
+
+  if (!fromUser || !message) {
+    alert('닉네임과 메시지를 입력하세요.');
+    return;
+  }
+
+  socket.emit('sendMessage', { fromUser, message });
+  messageInput.value = '';
+});
+
+// 엔터키 전송
+messageInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendBtn.click();
+});
+</script>
