@@ -1,103 +1,61 @@
-// contracts/TrustedChat.sol
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+// smart.js
+const { ethers } = require("ethers");
+const fs = require("fs");
+const path = require("path");
 
-contract TrustedChat {
-    /* ----------------------------- Ownership ----------------------------- */
-    address public owner;
+// 1. RPC Provider (예: Hardhat, Ganache, Infura, Alchemy 등)
+const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545"); // 로컬 노드 RPC
 
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner");
-        _;
-    }
+// 2. 운영자 지갑 (private key 필요)
+const privateKey = "0xYOUR_PRIVATE_KEY"; // 실제 운영자 프라이빗 키
+const wallet = new ethers.Wallet(privateKey, provider);
 
-    constructor() {
-        owner = msg.sender;
-        emit OwnerTransferred(address(0), msg.sender);
-    }
+// 3. ABI & Contract Address
+const abiPath = path.join(__dirname, "RelationMessage.json"); // 컴파일된 ABI JSON
+const abi = JSON.parse(fs.readFileSync(abiPath, "utf8")).abi;
+const contractAddress = "0xYOUR_DEPLOYED_CONTRACT_ADDRESS";
 
-    function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "zero addr");
-        emit OwnerTransferred(owner, newOwner);
-        owner = newOwner;
-    }
+// 4. Contract 객체
+const contract = new ethers.Contract(contractAddress, abi, wallet);
 
-    event OwnerTransferred(address indexed prevOwner, address indexed newOwner);
+// ----------------------------- //
+// 서버에서 호출할 함수들
+// ----------------------------- //
 
-    /* -------------------------- TrustScore logic -------------------------- */
-    // 개인신뢰점수 (예: 0~10000 사이로 저장하면 소수 없이도 표현 가능)
-    // 여기서는 1e4 = 1.0000 로 간주 (즉, 5000 = 0.5)
-    mapping(address => uint256) private trustScoreBP; // basis points(만분율)로 저장
-    uint256 public thresholdBP = 5000; // 기본 임계값: 0.5
-
-    event TrustScoreSet(address indexed user, uint256 scoreBP);
-    event ThresholdChanged(uint256 prevBP, uint256 newBP);
-
-    /// @notice 단일 사용자 점수 설정 (서버에서 호출)
-    function setTrustScore(address user, uint256 scoreBP_) external onlyOwner {
-        // 예: scoreBP_는 0~10000 범위를 권장
-        trustScoreBP[user] = scoreBP_;
-        emit TrustScoreSet(user, scoreBP_);
-    }
-
-    /// @notice 임계값 변경 (만분율 기준)
-    function setThresholdBP(uint256 newThresholdBP) external onlyOwner {
-        uint256 prev = thresholdBP;
-        thresholdBP = newThresholdBP;
-        emit ThresholdChanged(prev, newThresholdBP);
-    }
-
-    /// @notice 주소의 현재 신뢰 점수 조회 (만분율)
-    function getTrustScoreBP(address user) external view returns (uint256) {
-        return trustScoreBP[user];
-    }
-
-    /* --------------------------- Message storage -------------------------- */
-    struct Message {
-        address sender;
-        address receiver;
-        string content;
-        uint256 timestamp;
-    }
-
-    Message[] private messages;
-
-    event MessageAdded(address indexed sender, address indexed receiver, string content, uint256 timestamp);
-
-    /// @notice 보낸 사람(msg.sender)의 점수가 thresholdBP 이상일 때만 메시지가 기록됨
-    function addMessage(address receiver, string calldata content) external {
-        require(trustScoreBP[msg.sender] >= thresholdBP, "trust score below threshold");
-        messages.push(Message({
-            sender: msg.sender,
-            receiver: receiver,
-            content: content,
-            timestamp: block.timestamp
-        }));
-        emit MessageAdded(msg.sender, receiver, content, block.timestamp);
-    }
-
-    /// @notice 전체 메시지 개수
-    function getMessagesLength() external view returns (uint256) {
-        return messages.length;
-    }
-
-    /// @notice 인덱스로 단건 조회
-    function getMessage(uint256 index) external view returns (address sender, address receiver, string memory content, uint256 timestamp) {
-        require(index < messages.length, "out of bounds");
-        Message storage m = messages[index];
-        return (m.sender, m.receiver, m.content, m.timestamp);
-    }
-
-    /// @notice 특정 범위를 슬라이스로 조회 (프론트 최적화용)
-    function getMessagesRange(uint256 start, uint256 count) external view returns (Message[] memory out) {
-        require(start < messages.length || messages.length == 0, "start out of bounds");
-        uint256 end = start + count;
-        if (end > messages.length) end = messages.length;
-        uint256 len = end > start ? (end - start) : 0;
-
-        out = new Message[](len);
-        for (uint256 i = 0; i < len; i++) {
-            out[i] = messages[start + i];
-        }
-    }
+// 개인 점수 세팅
+async function setRelationScore(user, score) {
+  const tx = await contract.setRelationScore(user, score);
+  await tx.wait();
+  console.log(`✅ 점수 기록: ${user} = ${score}`);
 }
+
+// 메시지 전송
+async function recordOnChainMessage(content) {
+  const tx = await contract.sendMessage(content);
+  await tx.wait();
+  console.log(`✅ 메시지 기록: ${content}`);
+}
+
+// 메시지 클릭
+async function recordOnChainClick(messageId, clicker) {
+  const tx = await contract.clickMessage(messageId);
+  await tx.wait();
+  console.log(`✅ 메시지 클릭 기록: messageId=${messageId}, clicker=${clicker}`);
+}
+
+// 메시지 조회
+async function fetchMessages() {
+  const msgs = await contract.getMessages();
+  return msgs.map(m => ({
+    id: m.id.toString(),
+    sender: m.sender,
+    content: m.content
+  }));
+}
+
+module.exports = {
+  setRelationScore,
+  recordOnChainMessage,
+  recordOnChainClick,
+  fetchMessages
+};
