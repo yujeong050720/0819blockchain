@@ -31,7 +31,6 @@ contract TrustedChat {
     uint256 public thresholdBP = 5000; // 기본 임계값: 0.5
 
     event TrustScoreSet(address indexed user, uint256 scoreBP);
-    event TrustScoresBatchSet(uint256 count);
     event ThresholdChanged(uint256 prevBP, uint256 newBP);
 
     /// @notice 단일 사용자 점수 설정 (서버에서 호출)
@@ -39,16 +38,6 @@ contract TrustedChat {
         // 예: scoreBP_는 0~10000 범위를 권장
         trustScoreBP[user] = scoreBP_;
         emit TrustScoreSet(user, scoreBP_);
-    }
-
-    /// @notice 배치로 여러 사용자 점수 설정 (서버에서 호출)
-    function setTrustScoresBatch(address[] calldata users, uint256[] calldata scoresBP) external onlyOwner {
-        require(users.length == scoresBP.length, "length mismatch");
-        for (uint256 i = 0; i < users.length; i++) {
-            trustScoreBP[users[i]] = scoresBP[i];
-            emit TrustScoreSet(users[i], scoresBP[i]);
-        }
-        emit TrustScoresBatchSet(users.length);
     }
 
     /// @notice 임계값 변경 (만분율 기준)
