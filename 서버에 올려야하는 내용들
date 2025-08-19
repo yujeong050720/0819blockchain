@@ -1,0 +1,48 @@
+//데이터 구조
+const userSockets = new Map();      // 일반 사용자 지갑 → 소켓 ID
+const validatorSockets = new Map(); // 검증자 지갑 → 소켓 ID
+const pendingVotes = new Map();     // { 후보자 지갑 : { votes: {approve: Set, reject: Set}, required: 2/3 } }
+
+
+
+//사용자 입장 요청 처
+socket.on('requestEntry', ({ wallet, nickname }) => {
+  const validators = Array.from(validatorSockets.keys());
+  pendingVotes.set(wallet.toLowerCase(), {
+    votes: { approve: new Set(), reject: new Set() },
+    required: Math.ceil(validators.length * 2 / 3)
+  });
+
+  // 모든 검증자에게 새 후보 알림
+  validators.forEach(addr => {
+    const id = validatorSockets.get(addr);
+    io.to(id).emit('newUserAlert', { wallet });
+  });
+});
+
+
+
+//검증자 투표 처리
+socket.on('vote', ({ candidate, verifier, approve }) => {
+  const voteData = pendingVotes.get(candidate.toLowerCase());
+  if (!voteData) return;
+
+  if (approve) voteData.votes.approve.add(verifier.toLowerCase());
+  else voteData.votes.reject.add(verifier.toLowerCase());
+
+  const validatorsCount = validatorSockets.size;
+
+  // 2/3 이상 찬성 → 승인
+  if (voteData.votes.approve.size >= voteData.required) {
+    const userId = userSockets.get(candidate.toLowerCase());
+    if (userId) io.to(userId).emit('verificationCompleted', { candidate, approved: true });
+    pendingVotes.delete(candidate.toLowerCase());
+  }
+
+  // 과반 거절 → 거절
+  if (voteData.votes.reject.size > validatorsCount - voteData.required) {
+    const userId = userSockets.get(candidate.toLowerCase());
+    if (userId) io.to(userId).emit('verificationCompleted', { candidate, approved: false });
+    pendingVotes.delete(candidate.toLowerCase());
+  }
+});
