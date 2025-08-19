@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 
 // 클릭DB 파일 경로
-const clickDBPath = path.join(__dirname, "클릭DB.xlsx");
+const clickDBPath = path.join(__dirname, "ClickDB.xlsx");
 
 // ✅ 클릭 기록 불러오기
 function loadClicks() {
@@ -42,3 +42,4 @@ function recordClick(fromUser, toUser, link) {
 }
 
 module.exports = { recordClick, loadClicks };
+
