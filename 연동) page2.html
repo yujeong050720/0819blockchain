@@ -61,7 +61,12 @@ socket.on('receiveMessage', ({ fromUser, message }) => {
 function addMessage(fromUser, message) {
   const div = document.createElement('div');
   div.classList.add('message');
-  div.innerHTML = `<span class="from">${fromUser}:</span> ${message}`;
+
+  // 링크 감지: http:// 또는 https:// 로 시작하면 <a> 태그로
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const formattedMessage = message.replace(urlRegex, url => `<a href="${url}" target="_blank">${url}</a>`);
+
+  div.innerHTML = `<span class="from">${fromUser}:</span> ${formattedMessage}`;
   chatBox.appendChild(div);
   chatBox.scrollTop = chatBox.scrollHeight;
 }
