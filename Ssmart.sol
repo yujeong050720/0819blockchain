@@ -77,7 +77,7 @@ contract TrustedChat {
 
     /// @notice 보낸 사람(msg.sender)의 점수가 thresholdBP 이상일 때만 메시지가 기록됨
     function addMessage(address receiver, string calldata content) external {
-        require(trustScoreBP[msg.sender]=>= thresholdBP, "trust score below threshold");
+        require(trustScoreBP[msg.sender] >= thresholdBP, "trust score below threshold");
         messages.push(Message({
             sender: msg.sender,
             receiver: receiver,
