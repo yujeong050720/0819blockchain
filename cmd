@@ -15,3 +15,12 @@ ProviderError: Error: VM Exception while processing transaction: reverted with r
     at Proxy.addMessage (C:\Users\ido31\OneDrive\Desktop\0818bc\node_modules\ethers\src.ts\contract\contract.ts:352:16)
     at main (C:\Users\ido31\OneDrive\Desktop\0818bc\scripts\testMessages.js:14:3)
 PS C:\Users\ido31\OneDrive\Desktop\0818bc>
+
+
+
+PS C:\Users\ido31\OneDrive\Desktop\0818bc> npx hardhat run scripts/deploy.js --network localhost
+Deploying TrustedChat contract...
+✅ TrustedChat deployed to: 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
+Deployer address: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+Deployer balance: 9999994981010721617746
+PS C:\Users\ido31\OneDrive\Desktop\0818bc>
